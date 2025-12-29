@@ -12,12 +12,12 @@ from database import (
     init_db, add_user, get_movie_by_code, add_movie, delete_movie,
     add_channel, get_all_channels, delete_channel, get_all_users,
     get_user_count, get_active_user_count, get_movie_count, get_channel_count,
-    init_default_channel
+    init_default_channel, add_admin, get_all_admins, delete_admin, is_admin_in_db
 )
 from middleware import check_user_subscription, get_subscription_keyboard
 from keyboards import (
     get_admin_keyboard, get_channels_keyboard, get_back_keyboard, get_cancel_keyboard,
-    get_main_keyboard
+    get_main_keyboard, get_admins_keyboard
 )
 
 # Configure logging
@@ -38,11 +38,15 @@ class AdminStates(StatesGroup):
     waiting_for_movie_file = State()
     waiting_for_movie_title = State()
     waiting_for_delete_code = State()
+    waiting_for_admin_id = State()
 
 
 # Helper function to check if user is admin
-def is_admin(user_id: int) -> bool:
-    return user_id in ADMIN_IDS
+async def is_admin(user_id: int) -> bool:
+    """Check if user is admin (from config or database)"""
+    if user_id in ADMIN_IDS:
+        return True
+    return await is_admin_in_db(user_id)
 
 
 # Start command handler
@@ -57,7 +61,7 @@ async def cmd_start(message: Message):
     if not is_subscribed:
         text = MESSAGES["not_subscribed"]
         keyboard = get_subscription_keyboard(not_subscribed_channels)
-        await message.answer(text, reply_markup=keyboard)
+        await message.answer(text, reply_markupawait =keyboard)
         return
     
     # Show keyboard with admin button if user is admin
@@ -77,7 +81,7 @@ async def callback_check_subscription(callback: CallbackQuery):
         await callback.message.edit_text(text, reply_markup=keyboard)
     else:
         await callback.message.edit_text(MESSAGES["subscribed"])
-        main_keyboard = get_main_keyboard(is_admin=is_admin(user_id))
+        main_keyboard = get_main_keyboard(is_admin=await is_admin(user_id))
         await callback.message.answer(MESSAGES["start"], reply_markup=main_keyboard)
     
     await callback.answer()
@@ -90,7 +94,7 @@ async def handle_movie_request(message: Message, state: FSMContext):
     
     # Check if admin panel button pressed
     if message.text == "👨‍💼 Admin Panel":
-        if is_admin(message.from_user.id):
+        if await is_admin(message.from_user.id):
             keyboard = get_admin_keyboard()
             await message.answer(MESSAGES["admin_panel"], reply_markup=keyboard)
         else:
@@ -480,7 +484,7 @@ async def process_broadcast(message: Message, state: FSMContext):
 # Users list
 @dp.callback_query(F.data == "admin_users")
 async def callback_users(callback: CallbackQuery):
-    if not is_admin(callback.from_user.id):
+    if not await is_admin(callback.from_user.id):
         await callback.answer("❌ Sizda admin huquqi yo'q!", show_alert=True)
         return
     
@@ -502,6 +506,126 @@ async def callback_users(callback: CallbackQuery):
     keyboard = get_back_keyboard()
     await callback.message.edit_text(text, reply_markup=keyboard)
     await callback.answer()
+
+
+# Add admin - start
+@dp.callback_query(F.data == "admin_add_admin")
+async def callback_add_admin(callback: CallbackQuery, state: FSMContext):
+    if not await is_admin(callback.from_user.id):
+        await callback.answer("❌ Sizda admin huquqi yo'q!", show_alert=True)
+        return
+    
+    keyboard = get_cancel_keyboard()
+    await callback.message.edit_text(
+        "👨‍💼 Yangi admin qo'shish\n\nFoydalanuvchini botga /start yuborishini so'rang, keyin uning Telegram ID'sini yuboring.\n\nYoki forward qiling uning xabarini.",
+        reply_markup=keyboard
+    )
+    await state.set_state(AdminStates.waiting_for_admin_id)
+    await callback.answer()
+
+
+# Add admin - receive ID
+@dp.message(StateFilter(AdminStates.waiting_for_admin_id), F.text)
+async def process_add_admin(message: Message, state: FSMContext):
+    if not await is_admin(message.from_user.id):
+        await state.clear()
+        return
+    
+    try:
+        new_admin_id = int(message.text.strip())
+        
+        # Check if already admin
+        if new_admin_id in ADMIN_IDS or await is_admin_in_db(new_admin_id):
+            await message.answer("❌ Bu foydalanuvchi allaqachon admin!")
+            await state.clear()
+            keyboard = get_admin_keyboard()
+            await message.answer(MESSAGES["admin_panel"], reply_markup=keyboard)
+            return
+        
+        # Try to get user info
+        try:
+            user_info = await bot.get_chat(new_admin_id)
+            username = user_info.username if hasattr(user_info, 'username') else None
+        except:
+            username = None
+        
+        # Add admin to database
+        success = await add_admin(new_admin_id, username, message.from_user.id)
+        
+        if success:
+            await message.answer(f"✅ Yangi admin qo'shildi!\n\nID: {new_admin_id}\nUsername: @{username if username else 'N/A'}")
+        else:
+            await message.answer("❌ Xatolik yuz berdi!")
+        
+    except ValueError:
+        await message.answer("❌ Noto'g'ri ID! Raqam kiriting.")
+    
+    await state.clear()
+    keyboard = get_admin_keyboard()
+    await message.answer(MESSAGES["admin_panel"], reply_markup=keyboard)
+
+
+# List admins
+@dp.callback_query(F.data == "admin_list_admins")
+async def callback_list_admins(callback: CallbackQuery):
+    if not await is_admin(callback.from_user.id):
+        await callback.answer("❌ Sizda admin huquqi yo'q!", show_alert=True)
+        return
+    
+    admins = await get_all_admins()
+    
+    text = "👨‍💼 Adminlar ro'yxati:\n\n"
+    text += f"📋 Config adminlar ({len(ADMIN_IDS)} ta):\n"
+    for admin_id in ADMIN_IDS:
+        text += f"  • ID: {admin_id}\n"
+    
+    if admins:
+        text += f"\n📊 Database adminlar ({len(admins)} ta):\n"
+        for admin in admins:
+            username = f"@{admin['username']}" if admin['username'] else "N/A"
+            text += f"  • {username} (ID: {admin['user_id']})\n"
+    
+    text += "\n💡 O'chirish uchun quyidan tanlang:"
+    
+    keyboard = get_admins_keyboard(admins, callback.from_user.id)
+    await callback.message.edit_text(text, reply_markup=keyboard)
+    await callback.answer()
+
+
+# Delete admin - confirm
+@dp.callback_query(F.data.startswith("delete_admin_"))
+async def callback_confirm_delete_admin(callback: CallbackQuery):
+    if not await is_admin(callback.from_user.id):
+        await callback.answer("❌ Sizda admin huquqi yo'q!", show_alert=True)
+        return
+    
+    admin_id = int(callback.data.split("_")[-1])
+    
+    # Don't allow deleting config admins
+    if admin_id in ADMIN_IDS:
+        await callback.answer("❌ Config adminni o'chirish mumkin emas!", show_alert=True)
+        return
+    
+    await delete_admin(admin_id)
+    await callback.answer("✅ Admin o'chirildi!", show_alert=True)
+    
+    # Refresh list
+    admins = await get_all_admins()
+    text = "👨‍💼 Adminlar ro'yxati:\n\n"
+    text += f"📋 Config adminlar ({len(ADMIN_IDS)} ta):\n"
+    for aid in ADMIN_IDS:
+        text += f"  • ID: {aid}\n"
+    
+    if admins:
+        text += f"\n📊 Database adminlar ({len(admins)} ta):\n"
+        for admin in admins:
+            username = f"@{admin['username']}" if admin['username'] else "N/A"
+            text += f"  • {username} (ID: {admin['user_id']})\n"
+    
+    text += "\n💡 O'chirish uchun quyidan tanlang:"
+    
+    keyboard = get_admins_keyboard(admins, callback.from_user.id)
+    await callback.message.edit_text(text, reply_markup=keyboard)
 
 
 # Cancel button

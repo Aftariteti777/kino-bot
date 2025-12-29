@@ -27,7 +27,11 @@ def get_admin_keyboard():
             InlineKeyboardButton(text="🗑 Kino o'chirish", callback_data="admin_delete_movie")
         ],
         [
-            InlineKeyboardButton(text="📢 Xabar yuborish", callback_data="admin_broadcast"),
+            InlineKeyboardButton(text="�‍💼 Admin qo'shish", callback_data="admin_add_admin"),
+            InlineKeyboardButton(text="👥 Adminlar", callback_data="admin_list_admins")
+        ],
+        [
+            InlineKeyboardButton(text="�📢 Xabar yuborish", callback_data="admin_broadcast"),
             InlineKeyboardButton(text="👥 Foydalanuvchilar", callback_data="admin_users")
         ],
         [
@@ -63,4 +67,24 @@ def get_back_keyboard():
 def get_cancel_keyboard():
     """Cancel button keyboard"""
     keyboard = [[InlineKeyboardButton(text="❌ Bekor qilish", callback_data="cancel")]]
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def get_admins_keyboard(admins, current_admin_id):
+    """Admins list keyboard with delete buttons"""
+    keyboard = []
+    
+    for admin in admins:
+        # Don't allow deleting yourself
+        if admin['user_id'] == current_admin_id:
+            continue
+        admin_name = admin['username'] if admin['username'] else f"ID: {admin['user_id']}"
+        keyboard.append([
+            InlineKeyboardButton(
+                text=f"❌ {admin_name}",
+                callback_data=f"delete_admin_{admin['user_id']}"
+            )
+        ])
+    
+    keyboard.append([InlineKeyboardButton(text="🔙 Ortga", callback_data="admin_panel")])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)

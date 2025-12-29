@@ -52,6 +52,16 @@ async def init_db():
             )
         """)
         
+        # Admins table
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS admins (
+                user_id INTEGER PRIMARY KEY,
+                username TEXT,
+                added_by INTEGER,
+                added_date TEXT
+            )
+        """)
+        
         await db.commit()
 
 
@@ -190,3 +200,43 @@ async def get_channel_count():
         async with db.execute("SELECT COUNT(*) FROM mandatory_channels") as cursor:
             result = await cursor.fetchone()
             return result[0] if result else 0
+
+
+# Admin functions
+async def add_admin(user_id: int, username: str = None, added_by: int = None):
+    """Add a new admin"""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        now = datetime.now().isoformat()
+        try:
+            await db.execute("""
+                INSERT INTO admins (user_id, username, added_by, added_date)
+                VALUES (?, ?, ?, ?)
+            """, (user_id, username, added_by, now))
+            await db.commit()
+            return True
+        except aiosqlite.IntegrityError:
+            return False
+
+
+async def get_all_admins():
+    """Get all admins from database"""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM admins") as cursor:
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+
+
+async def delete_admin(user_id: int):
+    """Delete an admin"""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute("DELETE FROM admins WHERE user_id = ?", (user_id,))
+        await db.commit()
+
+
+async def is_admin_in_db(user_id: int):
+    """Check if user is admin in database"""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        async with db.execute("SELECT user_id FROM admins WHERE user_id = ?", (user_id,)) as cursor:
+            result = await cursor.fetchone()
+            return result is not None
