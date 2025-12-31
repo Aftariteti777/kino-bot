@@ -675,7 +675,7 @@ async def on_shutdown(bot: Bot):
     logger.info("Webhook deleted")
 
 
-async def main():
+def main():
     # Check if running on Railway (webhook mode) or locally (polling mode)
     webhook_url = os.getenv('RAILWAY_PUBLIC_DOMAIN') or os.getenv('RAILWAY_STATIC_URL')
     
@@ -702,16 +702,19 @@ async def main():
         
         logger.info(f"Starting webhook server on port {port}")
         
-        # Run app
+        # Run app (web.run_app creates its own event loop)
         web.run_app(app, host="0.0.0.0", port=port)
     else:
         # Polling mode for local development
-        await init_db()
-        await init_default_channel()
-        logger.info("Database initialized")
-        logger.info("Bot started in polling mode")
-        await dp.start_polling(bot)
+        async def start_polling():
+            await init_db()
+            await init_default_channel()
+            logger.info("Database initialized")
+            logger.info("Bot started in polling mode")
+            await dp.start_polling(bot)
+        
+        asyncio.run(start_polling())
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
