@@ -27,8 +27,12 @@ from keyboards import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize bot and dispatcher
-bot = Bot(token=BOT_TOKEN)
+# Initialize bot and dispatcher with timeout settings
+from aiogram.client.default import DefaultBotProperties
+from aiogram.client.session.aiohttp import AiohttpSession
+
+session = AiohttpSession(timeout=60)  # 60 seconds timeout
+bot = Bot(token=BOT_TOKEN, session=session)
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 
@@ -137,7 +141,7 @@ async def handle_movie_request(message: Message, state: FSMContext):
 # Admin panel command
 @dp.message(Command("admin"))
 async def cmd_admin(message: Message):
-    if not is_admin(message.from_user.id):
+    if not await is_admin(message.from_user.id):
         await message.answer("❌ Sizda admin huquqi yo'q!")
         return
     
@@ -148,7 +152,7 @@ async def cmd_admin(message: Message):
 # Admin panel callback
 @dp.callback_query(F.data == "admin_panel")
 async def callback_admin_panel(callback: CallbackQuery, state: FSMContext):
-    if not is_admin(callback.from_user.id):
+    if not await is_admin(callback.from_user.id):
         await callback.answer("❌ Sizda admin huquqi yo'q!", show_alert=True)
         return
     
@@ -161,7 +165,7 @@ async def callback_admin_panel(callback: CallbackQuery, state: FSMContext):
 # Statistics
 @dp.callback_query(F.data == "admin_stats")
 async def callback_admin_stats(callback: CallbackQuery):
-    if not is_admin(callback.from_user.id):
+    if not await is_admin(callback.from_user.id):
         await callback.answer("❌ Sizda admin huquqi yo'q!", show_alert=True)
         return
     
@@ -185,7 +189,7 @@ async def callback_admin_stats(callback: CallbackQuery):
 # Add channel - start
 @dp.callback_query(F.data == "admin_add_channel")
 async def callback_add_channel(callback: CallbackQuery, state: FSMContext):
-    if not is_admin(callback.from_user.id):
+    if not await is_admin(callback.from_user.id):
         await callback.answer("❌ Sizda admin huquqi yo'q!", show_alert=True)
         return
     
@@ -200,7 +204,7 @@ async def callback_add_channel(callback: CallbackQuery, state: FSMContext):
 async def process_add_channel(message: Message, state: FSMContext):
     logger.info(f"✅ Channel handler triggered! Received: {message.text}")
     
-    if not is_admin(message.from_user.id):
+    if not await is_admin(message.from_user.id):
         await state.clear()
         return
     
@@ -256,7 +260,7 @@ async def process_add_channel(message: Message, state: FSMContext):
 # List channels
 @dp.callback_query(F.data == "admin_list_channels")
 async def callback_list_channels(callback: CallbackQuery):
-    if not is_admin(callback.from_user.id):
+    if not await is_admin(callback.from_user.id):
         await callback.answer("❌ Sizda admin huquqi yo'q!", show_alert=True)
         return
     
@@ -279,7 +283,7 @@ async def callback_list_channels(callback: CallbackQuery):
 # Delete channel - show list
 @dp.callback_query(F.data == "admin_delete_channel")
 async def callback_delete_channel(callback: CallbackQuery):
-    if not is_admin(callback.from_user.id):
+    if not await is_admin(callback.from_user.id):
         await callback.answer("❌ Sizda admin huquqi yo'q!", show_alert=True)
         return
     
@@ -298,7 +302,7 @@ async def callback_delete_channel(callback: CallbackQuery):
 # Delete channel - confirm
 @dp.callback_query(F.data.startswith("delete_channel_"))
 async def callback_confirm_delete_channel(callback: CallbackQuery):
-    if not is_admin(callback.from_user.id):
+    if not await is_admin(callback.from_user.id):
         await callback.answer("❌ Sizda admin huquqi yo'q!", show_alert=True)
         return
     
@@ -324,7 +328,7 @@ async def callback_confirm_delete_channel(callback: CallbackQuery):
 # Add movie - start
 @dp.callback_query(F.data == "admin_add_movie")
 async def callback_add_movie(callback: CallbackQuery, state: FSMContext):
-    if not is_admin(callback.from_user.id):
+    if not await is_admin(callback.from_user.id):
         await callback.answer("❌ Sizda admin huquqi yo'q!", show_alert=True)
         return
     
@@ -340,7 +344,7 @@ async def callback_add_movie(callback: CallbackQuery, state: FSMContext):
 # Add movie - receive code
 @dp.message(StateFilter(AdminStates.waiting_for_movie_code), F.text)
 async def process_movie_code(message: Message, state: FSMContext):
-    if not is_admin(message.from_user.id):
+    if not await is_admin(message.from_user.id):
         return
     
     code = message.text.strip().upper()
@@ -357,7 +361,7 @@ async def process_movie_code(message: Message, state: FSMContext):
 # Add movie - receive file
 @dp.message(StateFilter(AdminStates.waiting_for_movie_file), F.video | F.document)
 async def process_movie_file(message: Message, state: FSMContext):
-    if not is_admin(message.from_user.id):
+    if not await is_admin(message.from_user.id):
         return
     
     if message.video:
@@ -381,7 +385,7 @@ async def process_movie_file(message: Message, state: FSMContext):
 # Add movie - receive title and save
 @dp.message(StateFilter(AdminStates.waiting_for_movie_title), F.text)
 async def process_movie_title(message: Message, state: FSMContext):
-    if not is_admin(message.from_user.id):
+    if not await is_admin(message.from_user.id):
         return
     
     title = message.text.strip()
@@ -405,7 +409,7 @@ async def process_movie_title(message: Message, state: FSMContext):
 # Delete movie - start
 @dp.callback_query(F.data == "admin_delete_movie")
 async def callback_delete_movie(callback: CallbackQuery, state: FSMContext):
-    if not is_admin(callback.from_user.id):
+    if not await is_admin(callback.from_user.id):
         await callback.answer("❌ Sizda admin huquqi yo'q!", show_alert=True)
         return
     
@@ -421,7 +425,7 @@ async def callback_delete_movie(callback: CallbackQuery, state: FSMContext):
 # Delete movie - receive code
 @dp.message(StateFilter(AdminStates.waiting_for_delete_code), F.text)
 async def process_delete_movie(message: Message, state: FSMContext):
-    if not is_admin(message.from_user.id):
+    if not await is_admin(message.from_user.id):
         return
     
     code = message.text.strip().upper()
@@ -441,7 +445,7 @@ async def process_delete_movie(message: Message, state: FSMContext):
 # Broadcast - start
 @dp.callback_query(F.data == "admin_broadcast")
 async def callback_broadcast(callback: CallbackQuery, state: FSMContext):
-    if not is_admin(callback.from_user.id):
+    if not await is_admin(callback.from_user.id):
         await callback.answer("❌ Sizda admin huquqi yo'q!", show_alert=True)
         return
     
@@ -454,7 +458,7 @@ async def callback_broadcast(callback: CallbackQuery, state: FSMContext):
 # Broadcast - send message
 @dp.message(StateFilter(AdminStates.waiting_for_broadcast))
 async def process_broadcast(message: Message, state: FSMContext):
-    if not is_admin(message.from_user.id):
+    if not await is_admin(message.from_user.id):
         return
     
     users = await get_all_users()
@@ -636,7 +640,7 @@ async def callback_confirm_delete_admin(callback: CallbackQuery):
 async def callback_cancel(callback: CallbackQuery, state: FSMContext):
     await state.clear()
     
-    if is_admin(callback.from_user.id):
+    if await is_admin(callback.from_user.id):
         keyboard = get_admin_keyboard()
         await callback.message.edit_text(MESSAGES["admin_panel"], reply_markup=keyboard)
     else:
