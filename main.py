@@ -68,11 +68,11 @@ async def cmd_start(message: Message):
     if not is_subscribed:
         text = MESSAGES["not_subscribed"]
         keyboard = get_subscription_keyboard(not_subscribed_channels)
-        await message.answer(text, reply_markupawait =keyboard)
+        await message.answer(text, reply_markup=keyboard)
         return
     
     # Show keyboard with admin button if user is admin
-    main_keyboard = get_main_keyboard(is_admin=is_admin(user.id))
+    main_keyboard = get_main_keyboard(is_admin=await is_admin(user.id))
     await message.answer(MESSAGES["start"], reply_markup=main_keyboard)
 
 
