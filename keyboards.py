@@ -88,3 +88,19 @@ def get_admins_keyboard(admins, current_admin_id):
     
     keyboard.append([InlineKeyboardButton(text="🔙 Ortga", callback_data="admin_panel")])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def get_movie_keyboard():
+    """Keyboard with movie links"""
+    keyboard = [
+        [
+            InlineKeyboardButton(text="🍿 Boshqa filmlar", url="https://t.me/kino_midas")
+        ],
+        [
+            InlineKeyboardButton(text="📤 Ulashish", switch_inline_query="Ajoyib kinolarni bu yerdan toping!")
+        ],
+        [
+            InlineKeyboardButton(text="📸 Instagram", url="https://instagram.com/kino_kodlii")
+        ]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)

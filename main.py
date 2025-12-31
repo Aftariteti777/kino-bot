@@ -20,7 +20,7 @@ from database import (
 from middleware import check_user_subscription, get_subscription_keyboard
 from keyboards import (
     get_admin_keyboard, get_channels_keyboard, get_back_keyboard, get_cancel_keyboard,
-    get_main_keyboard, get_admins_keyboard
+    get_main_keyboard, get_admins_keyboard, get_movie_keyboard
 )
 
 # Configure logging
@@ -124,9 +124,9 @@ async def handle_movie_request(message: Message, state: FSMContext):
         try:
             await message.answer_video(
                 video=movie['file_id'],
-                caption=f"🎬 {movie['title'] or 'Kino'}\n\n{movie['description'] or ''}"
+                caption=f"🎬 {movie['title'] or 'Kino'}\n\n{movie['description'] or ''}",
+                reply_markup=get_movie_keyboard()
             )
-            await message.answer(MESSAGES["movie_sent"])
         except Exception as e:
             logger.error(f"Error sending movie: {e}")
             await message.answer("❌ Kino yuborishda xatolik yuz berdi.")
