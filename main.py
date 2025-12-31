@@ -1,11 +1,14 @@
 import asyncio
 import logging
+import os
+from aiohttp import web
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import Message, CallbackQuery
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 
 from config import BOT_TOKEN, ADMIN_IDS, MESSAGES
 from database import (
@@ -650,15 +653,64 @@ async def callback_close(callback: CallbackQuery):
 
 
 # Main function
-async def main():
+async def on_startup(bot: Bot):
     # Initialize database
     await init_db()
     await init_default_channel()
     logger.info("Database initialized")
     
-    # Start polling
-    logger.info("Bot started")
-    await dp.start_polling(bot)
+    # Set webhook
+    webhook_url = os.getenv('RAILWAY_PUBLIC_DOMAIN') or os.getenv('RAILWAY_STATIC_URL')
+    if webhook_url:
+        # Remove https:// if present
+        webhook_url = webhook_url.replace('https://', '').replace('http://', '')
+        await bot.set_webhook(f"https://{webhook_url}/webhook")
+        logger.info(f"Webhook set to https://{webhook_url}/webhook")
+    else:
+        logger.info("No webhook URL found, using polling")
+
+
+async def on_shutdown(bot: Bot):
+    await bot.delete_webhook()
+    logger.info("Webhook deleted")
+
+
+async def main():
+    # Check if running on Railway (webhook mode) or locally (polling mode)
+    webhook_url = os.getenv('RAILWAY_PUBLIC_DOMAIN') or os.getenv('RAILWAY_STATIC_URL')
+    
+    if webhook_url:
+        # Webhook mode for Railway
+        dp.startup.register(on_startup)
+        dp.shutdown.register(on_shutdown)
+        
+        # Create aiohttp app
+        app = web.Application()
+        
+        # Create webhook handler
+        webhook_requests_handler = SimpleRequestHandler(
+            dispatcher=dp,
+            bot=bot,
+        )
+        webhook_requests_handler.register(app, path="/webhook")
+        
+        # Setup application
+        setup_application(app, dp, bot=bot)
+        
+        # Get port from environment or use default
+        port = int(os.getenv('PORT', 8080))
+        
+        logger.info(f"Starting webhook server on port {port}")
+        
+        # Run app
+        web.run_app(app, host="0.0.0.0", port=port)
+    else:
+        # Polling mode for local development
+        await init_db()
+        await init_default_channel()
+        logger.info("Database initialized")
+        logger.info("Bot started in polling mode")
+        await dp.start_polling(bot)
 
 
 if __name__ == "__main__":
